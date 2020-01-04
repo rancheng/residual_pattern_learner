@@ -38,6 +38,32 @@ def point_cloud(depth, K):
     y = np.where(valid, z * (r - cy) / fy, 0)
     return np.dstack((x, y, z))
 
+def point_cloud_offset(depth, K, offset):
+    """Transform a depth image into a point cloud with one point for each
+    pixel in the image, using the camera transform for a camera
+    centred at cx, cy with field of view fx, fy.
+
+    offset: [column, row]
+
+    depth is a 2-D ndarray with shape (rows, cols) containing
+    depths from 1 to 254 inclusive. The result is a 3-D array with
+    shape (rows, cols, 3). Pixels with invalid depth in the input have
+    NaN for the z-coordinate in the result.
+
+    """
+    fx = K[0, 0]
+    fy = K[1, 1]
+    cx = K[0, -1]
+    cy = K[1, -1]
+    rows, cols = depth.shape
+    c, r = np.meshgrid(np.arange(cols), np.arange(rows), sparse=True)
+    c += offset[0]
+    r += offset[1]
+    valid = (depth > 0) & (depth < 255)
+    z = np.where(valid, depth, -1)
+    x = np.where(valid, z * (c - cx) / fx, 0)
+    y = np.where(valid, z * (r - cy) / fy, 0)
+    return np.dstack((x, y, z))
 
 def reprojection_pc(sparse_depth, pose0, pose1, T_imu2cam, K_cam):
     '''
@@ -87,8 +113,8 @@ def reprojection_pc_with_pattern(sparse_depth, pattern, pose0, pose1, T_imu2cam,
         T_ref2New = np.matmul(pose0, np.linalg.inv(T_imu2cam))
         T_ref2New = np.matmul(np.linalg.inv(pose1), T_ref2New)
         T_ref2New = np.matmul(T_imu2cam, T_ref2New)
-        sparse_depth_shifted = shift_image(sparse_depth, offset[0], offset[1])
-        sparse_pc = point_cloud(sparse_depth_shifted * 10, K_cam)
+        # shift_image: image, column, row
+        sparse_pc = point_cloud_offset(sparse_depth * 10, K_cam, offset)
         # idx, idy = np.where(sparse_depth > 0)
         sparse_pc_res = sparse_pc[np.where(sparse_depth > 0)]
         num_sparse_pc = sparse_pc_res.shape[0]
@@ -108,7 +134,7 @@ def reprojection_pc_with_pattern(sparse_depth, pattern, pose0, pose1, T_imu2cam,
         # the order is as following: row_origin, col_corigin, row_target, col_target
         reproj_pc_list.append(np.vstack((np.vstack((idx, idy)),
                       pc_frame1_pixel)))  # 4 by n matrix, original pixel coordinate paired with target pixel coordinates
-    return reproj_pc_list, pc_frame1_camera, T_ref2New
+    return reproj_pc_list, sparse_pc_res, pc_frame1_camera, T_ref2New
 
 def shift_image(X, dx, dy):
     '''
