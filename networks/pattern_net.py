@@ -12,16 +12,15 @@ class PatternNetBase(nn.Module):
         """
         super().__init__()
         
-        self.inc = ResBlock(conf['in_channels'], 32)
-        self.down1 = Down(32, 64)
-        self.down2 = Down(64, 128)
-        self.down3 = Down(128, 256)
-        self.down4 = Down(256, 256)
-
-        self.up1 = Up(256, 128)
-        self.up2 = Up(128, 64)
-        self.outc = OutConv(64, conf['num_classes'])
-        self.softmax = nn.Softmax(dim=1)
+        self.inc = ResBlock(conf['in_channels'], 64)
+        self.down1 = Down(64, 128)
+        self.down2 = Down(128, 256)
+        self.down3 = Down(256, 512)
+        self.down4 = Down(512, 512)
+        self.up1 = Up(512, 256)
+        self.up2 = Up(256, 128)
+        self.up3 = Up(128, 64)
+        self.outc = OutConv(64, 1)
 
     def forward(self, x):
         """Default residual pattern index segmented through U-Net 
@@ -39,18 +38,17 @@ class PatternNetBase(nn.Module):
         x4 = self.down4(x4)
         x5 = self.up1(x4, x3)
         x6 = self.up2(x5, x2)
-        x = self.outc(x6)
-        seg = self.softmax(x)
-        return seg
+        x7 = self.up3(x6, x1)
+        x = self.outc(x7)
+        return torch.sigmoid(x)
 
 
-# Short U-Net Parts
-
+# U-Net Parts
 
 class OutConv(nn.Module):
     """Output Convolution"""
     def __init__(self, in_c, n_classes):
-        self.conv = nn.Conv2(in_c, n_classes, 1, 1)
+        self.conv = nn.Conv2d(in_c, n_classes, 1, 1)
 
     def forward(self, x):
         return self.conv(x)
@@ -58,7 +56,7 @@ class OutConv(nn.Module):
 
 class Down(nn.Module):
     """Pool => Conv Block"""
-    def __init__(self, in_c, out_c, pool='average', conv='residual'):
+    def __init__(self, in_c, out_c, pool='max', conv='residual'):
         super().__init__()
 
         # pooling operation
