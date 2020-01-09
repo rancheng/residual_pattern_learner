@@ -2,17 +2,72 @@ import torch
 import torch.nn as nn
 import torch.functional as F
 
+class ResidualLearner(nn.Module):
+
+    def __init__(self, in_channels, pattern, max_points):
+        """Class for learning residual pattern weights via joint segmentation
+        and gaussian blur attention mechanism"""
+        
+        # handles reshape of feature map to weight crops 
+        # and re-weighting default residual pattern
+        self.pattern = ResidualPattern(pattern, max_points)
+        
+        # residual U-Net segmentor
+        self.segmentor = PatternNetBase(in_channels)
+        
+        # m must be an odd number (e.g 3x3, 5x5, 11x11, ...)
+        m = pattern.shape[0]
+        self.attention = nn.Conv2d(1, 1, kernel_size=m, stride=1, bias=False, padding=m//2)
+
+    def forward(self, img, points):
+        img = self.segmentor(img)
+        img = self.attention(img)
+        weights = self.pattern.forward(img, points)
+        return x
+
+class ResidualPattern:
+
+    def __init__(self, pattern, max_points):
+        """Computes updated residual patterns given segmentation weights.
+        args:
+            pattern: np.array with shape (m, m)
+            max_points: number of top scoring points to select 
+                        from the weighted residual pattern
+        """
+        self.default_pattern = pattern
+        self.max_points = max_points
+
+    def compute_pattern(self, weights):
+        """Computes the updated residual pattern given weights.
+        args:
+            weights: np.array with shape (N, m, m)
+        """
+        pattern = self.pattern * weights
+        return pattern.round()
+
+    def img_to_weights(self, weight_map, points):
+        """Create (m, m) crops of feature map centered at N points
+        args:
+            weight_map: np.array of shape (H, W)
+            points: np,array of shape (N, 2)
+        returns:
+            weights: tensor of shape (N, m, m)
+        """
+        pass
+
+    def forward(self, img, points):
+        return self.compute_pattern(self.img_to_weights(img, points))
 
 class PatternNetBase(nn.Module):
 
-    def __init__(self, conf, num_points):
-        """Base class for residual pattern module
+    def __init__(self, in_channels):
+        """Base class for residual pattern module.
         args:
             conf: configuration yaml file
         """
         super().__init__()
         
-        self.inc = ResBlock(conf['in_channels'], 64)
+        self.inc = ResBlock(in_channels, 64)
         self.down1 = Down(64, 128)
         self.down2 = Down(128, 256)
         self.down3 = Down(256, 512)
