@@ -53,10 +53,28 @@ class ResidualPattern:
         returns:
             weights: tensor of shape (N, m, m)
         """
-        pass
+        
+        N = points.shape[0]
+        m = self.pattern.shape[0]
+        half_length = m//2
+
+        weight_map_pad = np.pad(weight_map, (m//2, m//2), mode='constant')
+        weights = np.zeros((N, m, m))
+
+        for i in range(N):
+            p = points[i]
+            weights[i, ...] = self.crop_from_point(weight_map_pad, p, half_length)
+        return weights
+
+    @staticmethod
+    def crop_from_point(weight_map, coords, half_length):
+        x, y == coords
+        weights = weight_map[y-half_length:y+half_length, x-half_length:x+half_length]
+        return weights
 
     def forward(self, img, points):
         return self.compute_pattern(self.img_to_weights(img, points))
+
 
 class PatternNetBase(nn.Module):
 
